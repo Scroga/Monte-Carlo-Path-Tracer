@@ -51,6 +51,11 @@ public:
         return Vec3f(a, b, c);
     }
 
+    float GetUniformRand(float min = 0.f, float max = 1.f) {
+        std::uniform_real_distribution<float> dist(min, max);
+        return dist(mRng);
+    }
+
 private:
 
     std::mt19937_64 mRng;

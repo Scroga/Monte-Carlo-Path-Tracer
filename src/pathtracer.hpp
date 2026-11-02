@@ -42,10 +42,12 @@ public:
 				const Vec3f surfacePoint = ray.origin + ray.direction * intersection->distance;
 				CoordinateFrame frame;
 				frame.SetFromZ(intersection->normal);
-				const Vec3f incomingDirection = frame.ToLocal(-ray.direction);
+				const Vec3f incomingDir = frame.ToLocal(-ray.direction);
 
 				Vec3f LoDirect = Vec3f(0);
 				const Material& mat = mScene.GetMaterial(intersection->materialID);
+
+                auto [localDir, brdf, pdf] = mat.SampleReflectedDirection(incomingDir, mRandomGenerator);
 
                 // Connect from the current surface point to every light source in the scene:
 				for (int i=0; i<mScene.GetLightCount(); i++)
@@ -61,8 +63,8 @@ public:
 					if (cosTheta > 0 && intensity.Max() > 0)
 					{
                         Ray rayToLight(surfacePoint, outgoingDirection, EPSILON_RAY); // Note! To prevent intersecting the same object we are already on, we need to offset the ray by EPSILON_RAY
-						if (!mScene.FindAnyIntersection(rayToLight, lightDistance)) { // Testing if the direction towards the light source is not occluded
-							LoDirect += intensity * mat.EvaluateBRDF(frame.ToLocal(outgoingDirection), incomingDirection) * cosTheta / pdf;
+						if (!mScene.FindAnyIntersection(rayToLight, lightDistance)) { // Testing if the direction towards the light source is not occluded                      
+                            LoDirect += intensity * mat.EvaluateBRDF(frame.ToLocal(outgoingDirection), incomingDir) * cosTheta / pdf;
                         }
 					}
 				}
