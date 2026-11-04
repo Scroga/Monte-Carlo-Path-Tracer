@@ -9,72 +9,107 @@
 
 class PathTracer : public AbstractRenderer
 {
+private:
+	Vec3f ComputeDirectLight(const Vec3f& surfacePoint, const Vec3f& normal, const Vec3f& incomingDir, const Material& mat)
+	{
+		CoordinateFrame frame;
+		frame.SetFromZ(normal);
+
+		Vec3f LoDirect(0.f);
+
+		for (int i = 0; i < mScene.GetLightCount(); i++)
+		{
+			const AbstractLight* light = mScene.GetLightPtr(i);
+
+			assert(light != nullptr);
+
+			auto [lightPoint, intensity, lightPdf] = light->SamplePointOnLight(surfacePoint, mRandomGenerator);
+
+			if (lightPdf <= 0.f || intensity.Max() <= 0.f) {
+				continue;
+			}
+
+			const Vec3f toLight = lightPoint - surfacePoint;
+			const float lightDistance = toLight.Length();
+
+			if (lightDistance <= 0.f) {
+				continue;
+			}
+
+			const Vec3f worldLightDir = toLight / lightDistance;
+			const Vec3f localLightDir = frame.ToLocal(worldLightDir);
+
+			const float cosTheta = localLightDir.z;
+
+			if (cosTheta <= 0.f) {
+				continue;
+			}
+
+			Ray shadowRay(surfacePoint, worldLightDir, EPSILON_RAY);
+
+			if (!mScene.FindAnyIntersection(shadowRay, lightDistance))
+			{
+				LoDirect += intensity * mat.EvaluateBRDF(incomingDir, localLightDir) * cosTheta / lightPdf;
+			}
+		}
+
+		return LoDirect;
+	};
+
 public:
+	Rng mRandomGenerator;
 
-    PathTracer(
-        const Scene& aScene,
-        int aSeed = 1234
-    ) :
-        AbstractRenderer(aScene), mRandomGenerator(aSeed)
-    {}
+	PathTracer(
+		const Scene& aScene,
+		int aSeed = 1234
+	) :
+		AbstractRenderer(aScene), mRandomGenerator(aSeed)
+	{
+	}
 
-    virtual void RunIteration(int iteration)
-    {
-        const int resolutionX = int(mScene.mCamera.mResolution.x);
-        const int resolutionY = int(mScene.mCamera.mResolution.y);
+	virtual void RunIteration(int iteration)
+	{
+		const int resolutionX = int(mScene.mCamera.mResolution.x);
+		const int resolutionY = int(mScene.mCamera.mResolution.y);
 
-        for (int pixelID = 0; pixelID < resolutionX * resolutionY; pixelID++)
-        {
-            // Current pixel coordinates (as integers):
-            const int x = pixelID % resolutionX;
-            const int y = pixelID / resolutionX;
+		for (int pixelID = 0; pixelID < resolutionX * resolutionY; pixelID++)
+		{
+			const int x = pixelID % resolutionX;
+			const int y = pixelID / resolutionX;
 
-            // Current pixel coordinates (as floating point numbers, randomly positioned inside a pixel square):
-            // E.g., for x = 5, y = 12, we can have sample coordinates from x = 5.00 to 5.99.., and y = 12.00 to 12.99..
-            const Vec2f sample = Vec2f(float(x), float(y)) + mRandomGenerator.GetVec2f();
+			const Vec2f sample = Vec2f(float(x), float(y)) + mRandomGenerator.GetVec2f();
 
-            // Generating a ray with an origin in the camera with a direction corresponding to the pixel coordinates:
-            Ray ray = mScene.mCamera.GenerateRay(sample);
+			Ray ray = mScene.mCamera.GenerateRay(sample);
 
-            auto intersection = mScene.FindClosestIntersection(ray);
-            if (intersection)
-            {
-				const Vec3f surfacePoint = ray.origin + ray.direction * intersection->distance;
-				CoordinateFrame frame;
-				frame.SetFromZ(intersection->normal);
-				const Vec3f incomingDir = frame.ToLocal(-ray.direction);
+			auto intersection = mScene.FindClosestIntersection(ray);
 
-				Vec3f LoDirect = Vec3f(0);
-				const Material& mat = mScene.GetMaterial(intersection->materialID);
-
-                auto [localDir, brdf, pdf] = mat.SampleReflectedDirection(incomingDir, mRandomGenerator);
-
-                // Connect from the current surface point to every light source in the scene:
-				for (int i=0; i<mScene.GetLightCount(); i++)
-				{
-					const AbstractLight* light = mScene.GetLightPtr(i);
-					assert(light != 0);
-
-                    auto [lightPoint, intensity, pdf] = light->SamplePointOnLight(surfacePoint, mRandomGenerator);
-                    Vec3f outgoingDirection = Normalize(lightPoint - surfacePoint);
-                    float lightDistance = sqrt((lightPoint - surfacePoint).LenSqr());
-                    float cosTheta = Dot(frame.mZ, outgoingDirection);
-					
-					if (cosTheta > 0 && intensity.Max() > 0)
-					{
-                        Ray rayToLight(surfacePoint, outgoingDirection, EPSILON_RAY); // Note! To prevent intersecting the same object we are already on, we need to offset the ray by EPSILON_RAY
-						if (!mScene.FindAnyIntersection(rayToLight, lightDistance)) { // Testing if the direction towards the light source is not occluded                      
-                            LoDirect += intensity * mat.EvaluateBRDF(frame.ToLocal(outgoingDirection), incomingDir) * cosTheta / pdf;
-                        }
-					}
+			if (!intersection) {
+				if (const BackgroundLight* background = mScene.GetBackground()) {
+					mFramebuffer.AddColor(sample, background->Evaluate(ray.direction));
 				}
+				continue;
+			}
 
-				mFramebuffer.AddColor(sample, LoDirect);
-            }
-        }
+			if (intersection->lightID >= 0) {
+				const AbstractLight* light = mScene.GetLightPtr(intersection->lightID);
+				mFramebuffer.AddColor(sample, light->Evaluate(ray.direction));
+				continue;
+			}
 
-        mIterations++;
-    }
+			const Vec3f surfacePoint = ray.origin + ray.direction * intersection->distance;
 
-    Rng mRandomGenerator;
+			const Material& mat = mScene.GetMaterial(intersection->materialID);
+
+			CoordinateFrame frame;
+			frame.SetFromZ(intersection->normal);
+
+			const Vec3f incomingDir = frame.ToLocal(-ray.direction);
+
+			const Vec3f LoDirect = ComputeDirectLight(surfacePoint, intersection->normal, incomingDir, mat);
+
+			mFramebuffer.AddColor(sample, LoDirect);
+		}
+
+		mIterations++;
+	}
 };
