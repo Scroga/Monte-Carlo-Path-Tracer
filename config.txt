@@ -1,0 +1,118 @@
+{
+    "version": "0.2.1",
+    "defaults": {},
+    "configurations": [
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_00",
+            "args": [
+                "-s",
+                "0",
+                "-i",
+                "100",
+                "-o",
+                "out_00.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_01",
+            "args": [
+                "-s",
+                "1",
+                "-i",
+                "100",
+                "-o",
+                "out_01.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_02",
+            "args": [
+                "-s",
+                "2",
+                "-i",
+                "100",
+                "-o",
+                "out_02.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_03",
+            "args": [
+                "-s",
+                "3",
+                "-i",
+                "100",
+                "-o",
+                "out_03.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_04",
+            "args": [
+                "-s",
+                "4",
+                "-i",
+                "100",
+                "-o",
+                "out_04.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_05",
+            "args": [
+                "-s",
+                "5",
+                "-i",
+                "100",
+                "-o",
+                "out_05.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_06",
+            "args": [
+                "-s",
+                "6",
+                "-i",
+                "100",
+                "-o",
+                "out_06.hdr"
+            ]
+        },
+        {
+            "type": "default",
+            "project": "CMakeLists.txt",
+            "projectTarget": "",
+            "name": "scene_07",
+            "args": [
+                "-s",
+                "7",
+                "-i",
+                "100",
+                "-o",
+                "out_07.hdr"
+            ]
+        }
+    ]
+}
