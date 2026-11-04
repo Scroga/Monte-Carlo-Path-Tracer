@@ -48,6 +48,10 @@ private:
 	}
 
 public:
+	Vec3f mDiffuseReflectance;
+	Vec3f mPhongReflectance;
+	float mPhongExponent;
+
 	Material()
 	{
 		Reset();
@@ -74,12 +78,6 @@ public:
 		if (incomingDir.z <= 0.f) {
 			return { Vec3f(0.f), Vec3f(0.f), 0.f };
 		}
-		
-		const Vec3f reflectedDir{
-			-incomingDir.x,
-			-incomingDir.y,
-			incomingDir.z
-		};
 
 		float probDiffuse = mDiffuseReflectance.Max();
 		float probSpecular = mPhongReflectance.Max();
@@ -93,6 +91,12 @@ public:
 		probSpecular /= total;
 
 		Vec3f generatedDir{};
+		const Vec3f reflectedDir{
+			-incomingDir.x,
+			-incomingDir.y,
+			incomingDir.z
+		};
+
 
 		if (rng.GetUniformRand(0.f, 1.f) <= probDiffuse) {
 			generatedDir = sampleDiffuse(rng);
@@ -172,8 +176,4 @@ public:
 
 		return diffuse + specular;
 	}
-
-	Vec3f mDiffuseReflectance;
-	Vec3f mPhongReflectance;
-	float mPhongExponent;
 };
