@@ -6,38 +6,62 @@
 #include "math.hpp"
 #include "rng.hpp"
 
+#define ALGORITHM 2
+
+// 0 Uniform hemisphere sampling
+// 1 Cosine-weighted hemisphere sampling
+// 2 BRDF importance sampling
+
 class Material
 {
-private:
-	Vec3f sampleDiffuse(Rng& rng) const {
+public:
+	Vec3f sampleUniformHemisphere(Rng& rng) const {
 		const float r1 = rng.GetUniformRand(0.f, 1.f);
 		const float r2 = rng.GetUniformRand(0.f, 1.f);
 
-		const float sinTheta = sqrt(1.f - r2);
-		const float cosTheta = sqrt(r2);
+		const float cosTheta = r2;
+		const float sinTheta = std::sqrt(1.f - cosTheta * cosTheta);
+
+		const float phi = 2.f * PI_F * r1;
+
+		Vec3f dir(
+			std::cos(phi) * sinTheta,
+			std::sin(phi) * sinTheta,
+			cosTheta
+		);
+
+		return dir;
+	}
+
+	Vec3f sampleCosineWeighted(Rng& rng) const {
+		const float r1 = rng.GetUniformRand(0.f, 1.f);
+		const float r2 = rng.GetUniformRand(0.f, 1.f);
+
+		const float sinTheta = std::sqrt(1.f - r2);
+		const float cosTheta = std::sqrt(r2);
 		const float phi = 2. * PI_F * r1;
 
 		Vec3f dir{
-			cos(phi) * sinTheta,
-			sin(phi) * sinTheta,
+			std::cos(phi) * sinTheta,
+			std::sin(phi) * sinTheta,
 			cosTheta
 		};
 
 		return dir;
 	}
 
-	Vec3f sampleSpecular(const Vec3f& reflectedDir, Rng& rng) const {
+	Vec3f samplePhongSpecularLobe(const Vec3f& reflectedDir, Rng& rng) const {
 		const float r1 = rng.GetUniformRand(0.f, 1.f);
 		const float r2 = rng.GetUniformRand(0.f, 1.f);
 
-		const float cosTheta = pow(r2, 1.f / (mPhongExponent + 1.f));
-		const float sinTheta = sqrt(1.f - cosTheta * cosTheta);
+		const float cosTheta = std::pow(r2, 1.f / (mPhongExponent + 1.f));
+		const float sinTheta = std::sqrt(1.f - cosTheta * cosTheta);
 
 		const float phi = 2. * PI_F * r1;
 
 		Vec3f dir{
-			cos(phi) * sinTheta,
-			sin(phi) * sinTheta,
+			std::cos(phi) * sinTheta,
+			std::sin(phi) * sinTheta,
 			cosTheta
 		};
 
@@ -47,7 +71,6 @@ private:
 		return lobeFrame.ToWorld(dir);
 	}
 
-public:
 	Vec3f mDiffuseReflectance;
 	Vec3f mPhongReflectance;
 	float mPhongExponent;
@@ -79,6 +102,15 @@ public:
 			return { Vec3f(0.f), Vec3f(0.f), 0.f };
 		}
 
+		Vec3f generatedDir{};
+
+#if ALGORITHM == 0
+		generatedDir = sampleUniformHemisphere(rng);
+
+#elif ALGORITHM == 1
+		generatedDir = sampleCosineWeighted(rng);
+
+#elif ALGORITHM == 2
 		float probDiffuse = mDiffuseReflectance.Max();
 		float probSpecular = mPhongReflectance.Max();
 		float total = probDiffuse + probSpecular;
@@ -90,24 +122,25 @@ public:
 		probDiffuse /= total;
 		probSpecular /= total;
 
-		Vec3f generatedDir{};
 		const Vec3f reflectedDir{
 			-incomingDir.x,
 			-incomingDir.y,
 			incomingDir.z
 		};
 
-
-		if (rng.GetUniformRand(0.f, 1.f) <= probDiffuse) {
-			generatedDir = sampleDiffuse(rng);
+		if (rng.GetUniformRand(0.f, 1.f) < probDiffuse) {
+			generatedDir = sampleCosineWeighted(rng);
 		}
 		else {
-			generatedDir = sampleSpecular(reflectedDir, rng);
+			generatedDir = samplePhongSpecularLobe(reflectedDir, rng);
 		}
 
 		if (generatedDir.z <= 0.f) {
 			return { generatedDir, Vec3f(0.f), 0.f };
 		}
+#else
+#error "Invalid ALGORITHM! Use 0, 1, or 2."
+#endif
 
 		Vec3f brdf = EvaluateBRDF(incomingDir, generatedDir);
 		float pdf = PDF(incomingDir, generatedDir);
@@ -127,9 +160,17 @@ public:
 			return 0.f;
 		}
 
+#if ALGORITHM == 0
+		return 1.f / (2.f * PI_F);
+
+#elif ALGORITHM == 1
+		return outgoingDir.z / PI_F;
+
+#elif ALGORITHM == 2
 		float probDiffuse = mDiffuseReflectance.Max();
 		float probSpecular = mPhongReflectance.Max();
-		float total = probDiffuse + probSpecular;
+
+		const float total = probDiffuse + probSpecular;
 
 		if (total <= 0.f) {
 			return 0.f;
@@ -144,12 +185,21 @@ public:
 			incomingDir.z
 		);
 
-		const float cosThetaRefl = std::max(0.f, Dot(reflectedDir, outgoingDir));
+		const float cosThetaRefl =
+			std::max(0.f, Dot(reflectedDir, outgoingDir));
 
 		const float pdfDiffuse = outgoingDir.z / PI_F;
-		const float pdfSpecular = (mPhongExponent + 1.f) / (2.f * PI_F) * pow(cosThetaRefl, mPhongExponent);
 
-		return probDiffuse * pdfDiffuse + probSpecular * pdfSpecular;
+		const float pdfSpecular =
+			(mPhongExponent + 1.f) / (2.f * PI_F) *
+			pow(cosThetaRefl, mPhongExponent);
+
+		return probDiffuse * pdfDiffuse +
+			probSpecular * pdfSpecular;
+
+#else
+#error "Invalid ALGORITHM value"
+#endif
 	}
 
 	/**

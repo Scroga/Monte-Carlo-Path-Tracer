@@ -10,8 +10,7 @@
 class PathTracer : public AbstractRenderer
 {
 private:
-	Vec3f ComputeDirectLight(const Vec3f& surfacePoint, const Vec3f& normal, const Vec3f& incomingDir, const Material& mat)
-	{
+	Vec3f ComputeDirectLight(const Vec3f& surfacePoint, const Vec3f& normal, const Vec3f& incomingDir, const Material& mat) {
 		CoordinateFrame frame;
 		frame.SetFromZ(normal);
 
@@ -32,18 +31,10 @@ private:
 			const Vec3f toLight = lightPoint - surfacePoint;
 			const float lightDistance = toLight.Length();
 
-			if (lightDistance <= 0.f) {
-				continue;
-			}
-
 			const Vec3f worldLightDir = toLight / lightDistance;
 			const Vec3f localLightDir = frame.ToLocal(worldLightDir);
 
 			const float cosTheta = localLightDir.z;
-
-			if (cosTheta <= 0.f) {
-				continue;
-			}
 
 			Ray shadowRay(surfacePoint, worldLightDir, EPSILON_RAY);
 
@@ -52,7 +43,6 @@ private:
 				LoDirect += intensity * mat.EvaluateBRDF(incomingDir, localLightDir) * cosTheta / lightPdf;
 			}
 		}
-
 		return LoDirect;
 	};
 
@@ -104,10 +94,38 @@ public:
 			frame.SetFromZ(intersection->normal);
 
 			const Vec3f incomingDir = frame.ToLocal(-ray.direction);
+			
+			auto [localDir, brdf, pdf] = mat.SampleReflectedDirection(incomingDir, mRandomGenerator);
 
-			const Vec3f LoDirect = ComputeDirectLight(surfacePoint, intersection->normal, incomingDir, mat);
+			if (pdf <= 0.f || localDir.z <= 0.f) {
+				continue;
+			}
 
-			mFramebuffer.AddColor(sample, LoDirect);
+			const Vec3f worldDir = frame.ToWorld(localDir);
+
+			Ray reflectedRay(surfacePoint, worldDir, EPSILON_RAY);
+
+			auto reflectedIntersection = mScene.FindClosestIntersection(reflectedRay);
+
+			Vec3f Li(0.f);
+
+			if (reflectedIntersection) {
+				if (reflectedIntersection->lightID >= 0) {
+					const AbstractLight* light = mScene.GetLightPtr(reflectedIntersection->lightID);
+					Li = light->Evaluate(worldDir);
+				}
+			}
+			else { 
+				if (const BackgroundLight* background = mScene.GetBackground()) {
+					Li = background->Evaluate(worldDir);
+				}
+			}
+
+			const float cosTheta = localDir.z;
+
+			const Vec3f Lo = Li * brdf * cosTheta / pdf;
+
+			mFramebuffer.AddColor(sample, Lo);
 		}
 
 		mIterations++;
